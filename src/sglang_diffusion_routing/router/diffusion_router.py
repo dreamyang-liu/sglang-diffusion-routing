@@ -380,6 +380,32 @@ class DiffusionRouter:
     async def update_weights_from_disk(self, request: Request):
         """Broadcast weight reload to all healthy workers."""
         body = await request.body()
+        try:
+            payload = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "update_weights_from_disk: request body must be valid JSON. "
+                },
+            )
+
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("model_path"), str
+        ):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "update_weights_from_disk: model_path (str) is required"},
+            )
+
+        if "target_modules" in payload:
+            tm = payload["target_modules"]
+            if not isinstance(tm, list) or not all(isinstance(m, str) for m in tm):
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "update_weights_from_disk: target_modules must be a list of strings"},
+                )
+
         headers = dict(request.headers)
         results = await self._broadcast_to_workers(
             "update_weights_from_disk", body, headers
